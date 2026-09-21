@@ -1,0 +1,2352 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>RetroCam — 復古點陣拍立得</title>
+
+<style>
+*{box-sizing:border-box}
+
+:root{
+  --bg:#090b0a;
+  --panel:#121614;
+  --line:#29312d;
+  --text:#e8eee9;
+  --muted:#7e8983;
+  --accent:#a8ff60;
+  --paper:#f2eee3;
+  --danger:#ff6b6b;
+}
+
+body{
+  margin:0;
+  min-height:100vh;
+  background:
+    radial-gradient(circle at 50% -20%,#1b251f 0,#090b0a 48%);
+  color:var(--text);
+  font-family:Inter,"Noto Sans TC","Microsoft JhengHei",sans-serif;
+}
+
+.app{
+  width:min(1180px,94vw);
+  margin:auto;
+  padding:28px 0 50px;
+}
+
+header{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  border-bottom:1px solid var(--line);
+  padding-bottom:18px;
+  margin-bottom:24px;
+}
+
+.brand small{
+  color:var(--accent);
+  letter-spacing:.18em;
+  font-size:11px;
+}
+
+.brand h1{
+  margin:5px 0 0;
+  font-size:30px;
+  letter-spacing:.08em;
+  font-weight:700;
+}
+
+.status{
+  color:var(--muted);
+  font-size:12px;
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+
+.dot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#555;
+}
+
+.dot.active{
+  background:var(--accent);
+  box-shadow:0 0 10px var(--accent);
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+}
+
+.panel{
+  background:linear-gradient(145deg,#151a17,#0f1311);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:18px;
+  box-shadow:0 18px 50px #0005;
+}
+
+.panel-title{
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:14px;
+}
+
+.panel-title span:first-child{
+  font-size:12px;
+  letter-spacing:.12em;
+  color:var(--muted);
+}
+
+.resolution{
+  font-family:monospace;
+  font-size:11px;
+  color:var(--accent);
+}
+
+.camera-wrap{
+  position:relative;
+  overflow:hidden;
+  border-radius:8px;
+  background:#050605;
+  aspect-ratio:4/3;
+}
+
+video{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+  transform:scaleX(-1);
+}
+
+.camera-grid{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:
+    linear-gradient(#ffffff12 1px,transparent 1px),
+    linear-gradient(90deg,#ffffff12 1px,transparent 1px);
+  background-size:10% 10%;
+}
+
+.paper{
+  background:#242724;
+  padding:18px;
+  border-radius:8px;
+}
+
+canvas{
+  width:100%;
+  height:100%;
+  image-rendering:pixelated;
+  display:block;
+}
+
+.paper canvas{
+  background:var(--paper);
+  box-shadow:0 5px 25px #0008;
+}
+
+.controls{
+  display:flex;
+  gap:10px;
+  margin-top:14px;
+  flex-wrap:wrap;
+}
+
+button{
+  border:1px solid #3b473f;
+  background:#19201c;
+  color:var(--text);
+  padding:12px 18px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:13px;
+  transition:.15s;
+}
+
+button:hover:not(:disabled){
+  border-color:var(--accent);
+  color:var(--accent);
+}
+
+button:disabled{
+  opacity:.35;
+  cursor:not-allowed;
+}
+
+button.primary{
+  background:var(--accent);
+  color:#10140e;
+  border-color:var(--accent);
+  font-weight:700;
+}
+
+button.print{
+  background:#e8eee9;
+  color:#10130f;
+  border-color:#e8eee9;
+  font-weight:700;
+}
+
+.info{
+  margin-top:18px;
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:8px;
+}
+
+.info-item{
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:11px;
+  background:#0d110f;
+}
+
+.info-item label{
+  display:block;
+  color:var(--muted);
+  font-size:10px;
+  margin-bottom:5px;
+}
+
+.info-item strong{
+  font-family:monospace;
+  font-size:12px;
+  color:#dce5df;
+}
+
+.progress-wrap{
+  margin-top:15px;
+  display:none;
+}
+
+.progress-bg{
+  height:5px;
+  background:#222824;
+  border-radius:99px;
+  overflow:hidden;
+}
+
+.progress-bar{
+  height:100%;
+  width:0%;
+  background:var(--accent);
+  transition:width .1s linear;
+}
+
+.progress-text{
+  margin-top:7px;
+  font:10px monospace;
+  color:var(--muted);
+}
+
+.bluetooth{
+  margin-top:18px;
+  border:1px solid var(--line);
+  background:#0d110f;
+  border-radius:10px;
+  padding:14px;
+}
+
+.bt-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.bt-title{
+  font-size:11px;
+  letter-spacing:.12em;
+  color:var(--muted);
+}
+
+.bt-state{
+  font:11px monospace;
+  color:var(--muted);
+}
+
+.bt-state.connected{
+  color:var(--accent);
+}
+
+.bt-info{
+  margin-top:10px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+  font:10px monospace;
+  color:#89958e;
+}
+
+.log{
+  margin-top:12px;
+  height:100px;
+  overflow:auto;
+  background:#070908;
+  border:1px solid #202722;
+  border-radius:6px;
+  padding:9px;
+  font:10px/1.6 monospace;
+  color:#829087;
+}
+
+.log .ok{
+  color:var(--accent);
+}
+
+.log .err{
+  color:var(--danger);
+}
+
+.pipeline{
+  margin-top:18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.step{
+  padding:8px 11px;
+  border:1px solid var(--line);
+  border-radius:6px;
+  font-family:monospace;
+  font-size:10px;
+  color:#aeb8b2;
+}
+
+.arrow{
+  color:var(--accent);
+  font-size:12px;
+}
+
+footer{
+  margin-top:25px;
+  text-align:center;
+  color:#59635e;
+  font-size:10px;
+  letter-spacing:.12em;
+}
+
+@media(max-width:760px){
+  .grid{
+    grid-template-columns:1fr;
+  }
+
+  header{
+    align-items:flex-start;
+    gap:15px;
+    flex-direction:column;
+  }
+
+  .info{
+    grid-template-columns:1fr 1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="app">
+
+<header>
+  <div class="brand">
+    <small>RETROCAM / BLE PROTOTYPE</small>
+    <h1>復古點陣拍立得</h1>
+  </div>
+
+  <div class="status">
+    <span id="statusDot" class="dot"></span>
+    <span id="statusText">SYSTEM OFFLINE</span>
+  </div>
+</header>
+
+
+<div class="grid">
+
+<section class="panel">
+
+  <div class="panel-title">
+    <span>CAMERA INPUT</span>
+    <span class="resolution">640 × 480</span>
+  </div>
+
+  <div class="camera-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="camera-grid"></div>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn" class="primary">
+      啟用相機
+    </button>
+
+    <button id="captureBtn" disabled>
+      拍攝並點陣化
+    </button>
+  </div>
+
+</section>
+
+
+<section class="panel">
+
+  <div class="panel-title">
+    <span>THERMAL OUTPUT</span>
+    <span class="resolution">384 × 288 / 1-BIT</span>
+  </div>
+
+  <div class="paper">
+    <canvas id="output" width="384" height="288"></canvas>
+  </div>
+
+  <div class="controls">
+    <button id="printBtn" class="print" disabled>
+      🖨 列印
+    </button>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bg">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <div class="progress-text" id="progressText">
+      READY
+    </div>
+  </div>
+
+</section>
+
+</div>
+
+
+<div class="info">
+
+  <div class="info-item">
+    <label>INPUT</label>
+    <strong>VGA 640×480</strong>
+  </div>
+
+  <div class="info-item">
+    <label>OUTPUT</label>
+    <strong>384×288</strong>
+  </div>
+
+  <div class="info-item">
+    <label>DITHER</label>
+    <strong>SIERRA</strong>
+  </div>
+
+  <div class="info-item">
+    <label>DATA</label>
+    <strong>13,824 BYTE</strong>
+  </div>
+
+  <div class="info-item">
+    <label>BLE PACKET</label>
+    <strong>480 BYTE</strong>
+  </div>
+
+</div>
+
+
+<div class="bluetooth">
+
+  <div class="bt-header">
+    <span class="bt-title">
+      BLUETOOTH THERMAL PRINTER
+    </span>
+
+    <span id="btState" class="bt-state">
+      DISCONNECTED
+    </span>
+  </div>
+
+  <div class="controls">
+    <button id="connectBtn" class="primary">
+      🔵 連接印表機
+    </button>
+
+    <button id="disconnectBtn" disabled>
+      中斷連線
+    </button>
+  </div>
+
+  <div class="bt-info">
+    <span id="printerName">DEVICE: —</span>
+    <span>MAC: 48:0F:57:47:4E:87</span>
+    <span>COMMAND: AE01</span>
+    <span>DATA: AE03</span>
+  </div>
+
+  <div class="log" id="log"></div>
+
+</div>
+
+
+<div class="pipeline">
+
+  <div class="step">CAMERA</div>
+  <div class="arrow">→</div>
+
+  <div class="step">RESIZE</div>
+  <div class="arrow">→</div>
+
+  <div class="step">GRAY</div>
+  <div class="arrow">→</div>
+
+  <div class="step">GAMMA</div>
+  <div class="arrow">→</div>
+
+  <div class="step">ENHANCE</div>
+  <div class="arrow">→</div>
+
+  <div class="step">CLAHE</div>
+  <div class="arrow">→</div>
+
+  <div class="step">SHARPEN</div>
+  <div class="arrow">→</div>
+
+  <div class="step">SIERRA</div>
+  <div class="arrow">→</div>
+
+  <div class="step">1-BIT</div>
+  <div class="arrow">→</div>
+
+  <div class="step">BLE</div>
+  <div class="arrow">→</div>
+
+  <div class="step">PRINTER</div>
+
+</div>
+
+
+<footer>
+  ESP32-S3 · BLE THERMAL PRINTER · 384 PX
+</footer>
+
+</div>
+
+
+<script>
+
+/* =========================================================
+ * RETROCAM
+ * Camera → APK-like Image Pipeline
+ * → Sierra Dither
+ * → BLE Thermal Printer
+ * ========================================================= */
+
+
+/* =========================
+ * CONSTANTS
+ * ========================= */
+
+const WIDTH = 384;
+const HEIGHT = 288;
+
+const BYTES_PER_LINE = 48;
+const TOTAL_BYTES = WIDTH / 8 * HEIGHT;
+
+const BLE_CHUNK_SIZE = 480;
+
+const COMMAND_UUID =
+  "0000ae01-0000-1000-8000-00805f9b34fb";
+
+const DATA_UUID =
+  "0000ae03-0000-1000-8000-00805f9b34fb";
+
+const BLE_DELAY_COMMAND = 300;
+const BLE_DELAY_DATA = 60;
+
+
+/* =========================
+ * DOM
+ * ========================= */
+
+const video =
+  document.getElementById("video");
+
+const output =
+  document.getElementById("output");
+
+const startBtn =
+  document.getElementById("startBtn");
+
+const captureBtn =
+  document.getElementById("captureBtn");
+
+const printBtn =
+  document.getElementById("printBtn");
+
+const connectBtn =
+  document.getElementById("connectBtn");
+
+const disconnectBtn =
+  document.getElementById("disconnectBtn");
+
+const statusDot =
+  document.getElementById("statusDot");
+
+const statusText =
+  document.getElementById("statusText");
+
+const btState =
+  document.getElementById("btState");
+
+const printerName =
+  document.getElementById("printerName");
+
+const logElement =
+  document.getElementById("log");
+
+const progressWrap =
+  document.getElementById("progressWrap");
+
+const progressBar =
+  document.getElementById("progressBar");
+
+const progressText =
+  document.getElementById("progressText");
+
+
+/* =========================
+ * CAMERA
+ * ========================= */
+
+const srcCanvas =
+  document.createElement("canvas");
+
+const srcCtx =
+  srcCanvas.getContext(
+    "2d",
+    {willReadFrequently:true}
+  );
+
+const outCtx =
+  output.getContext(
+    "2d",
+    {willReadFrequently:true}
+  );
+
+let cameraStream = null;
+
+
+/* =========================
+ * BLE
+ * ========================= */
+
+let bluetoothDevice = null;
+let bluetoothServer = null;
+
+let commandCharacteristic = null;
+let dataCharacteristic = null;
+
+let ditheredBits = null;
+
+
+/* =========================================================
+ * LOG
+ * ========================================================= */
+
+function log(message,type=""){
+
+  const line =
+    document.createElement("div");
+
+  line.textContent =
+    `[${new Date().toLocaleTimeString()}] ${message}`;
+
+  if(type)
+    line.className = type;
+
+  logElement.appendChild(line);
+
+  logElement.scrollTop =
+    logElement.scrollHeight;
+
+  console.log(message);
+}
+
+
+/* =========================================================
+ * CAMERA START
+ * ========================================================= */
+
+startBtn.addEventListener(
+  "click",
+  async () => {
+
+    try{
+
+      cameraStream =
+        await navigator.mediaDevices.getUserMedia({
+
+          video:{
+            width:{ideal:640},
+            height:{ideal:480},
+            facingMode:"environment"
+          },
+
+          audio:false
+        });
+
+      video.srcObject =
+        cameraStream;
+
+      statusDot.classList.add("active");
+
+      statusText.textContent =
+        "CAMERA ONLINE";
+
+      startBtn.textContent =
+        "相機已啟用";
+
+      captureBtn.disabled =
+        false;
+
+      log(
+        "Camera connected",
+        "ok"
+      );
+
+    }catch(error){
+
+      console.error(error);
+
+      statusText.textContent =
+        "CAMERA ERROR";
+
+      log(
+        "Camera error: " + error.message,
+        "err"
+      );
+
+      alert(
+        "無法取得攝影機。\n" +
+        "請確認瀏覽器已允許相機權限。"
+      );
+    }
+
+  }
+);
+
+
+/* =========================================================
+ * CAPTURE
+ * ========================================================= */
+
+captureBtn.addEventListener(
+  "click",
+  captureAndProcess
+);
+
+
+async function captureAndProcess(){
+
+  if(!video.videoWidth)
+    return;
+
+  log("Capturing frame...");
+
+  srcCanvas.width =
+    WIDTH;
+
+  srcCanvas.height =
+    HEIGHT;
+
+  /*
+   * 模擬 ESP32-CAM：
+   * Camera → VGA → 384×288
+   */
+
+  srcCtx.drawImage(
+    video,
+    0,
+    0,
+    WIDTH,
+    HEIGHT
+  );
+
+  const image =
+    srcCtx.getImageData(
+      0,
+      0,
+      WIDTH,
+      HEIGHT
+    );
+
+  const data =
+    image.data;
+
+  const gray =
+    new Float32Array(
+      WIDTH * HEIGHT
+    );
+
+
+  /* =========================
+   * RGB → GRAY
+   * ========================= */
+
+  for(
+    let i=0,p=0;
+    i<data.length;
+    i+=4,p++
+  ){
+
+    const r=data[i];
+    const g=data[i+1];
+    const b=data[i+2];
+
+    gray[p] =
+      0.299*r +
+      0.587*g +
+      0.114*b;
+  }
+
+
+  /* =========================
+   * Gaussian Blur
+   * ========================= */
+
+  const blurred =
+    gaussianBlur(
+      gray,
+      WIDTH,
+      HEIGHT
+    );
+
+
+  /* =========================
+   * MEAN
+   * ========================= */
+
+  let mean = 0;
+
+  for(
+    let i=0;
+    i<blurred.length;
+    i++
+  ){
+    mean += blurred[i];
+  }
+
+  mean /=
+    blurred.length;
+
+
+  /* =========================
+   * APK GAMMA
+   * ========================= */
+
+  let gamma;
+
+  if(mean < 130)
+    gamma = 0.90;
+
+  else if(mean < 170)
+    gamma = 0.95;
+
+  else if(mean < 180)
+    gamma = 1.00;
+
+  else if(mean < 190)
+    gamma = 1.05;
+
+  else if(mean < 210)
+    gamma = 1.10;
+
+  else if(mean < 240)
+    gamma = 1.20;
+
+  else
+    gamma = 1.30;
+
+
+  for(
+    let i=0;
+    i<blurred.length;
+    i++
+  ){
+
+    blurred[i] =
+      Math.round(
+        Math.pow(
+          blurred[i]/255,
+          1/gamma
+        ) * 255
+      );
+  }
+
+
+  /* =========================
+   * ENHANCE
+   * ========================= */
+
+  const alpha =
+    mean < 200
+      ? 1.07
+      : 1.06;
+
+  for(
+    let i=0;
+    i<blurred.length;
+    i++
+  ){
+
+    blurred[i] =
+      clamp(
+        Math.abs(
+          alpha * blurred[i]
+        )
+      );
+  }
+
+
+  /* =========================
+   * CLAHE
+   * ========================= */
+
+  clahe(
+    blurred,
+    WIDTH,
+    HEIGHT,
+    alpha
+  );
+
+
+  /* =========================
+   * SHARPEN
+   * ========================= */
+
+  sharpen(
+    blurred,
+    WIDTH,
+    HEIGHT
+  );
+
+
+  /* =========================
+   * SIERRA
+   * ========================= */
+
+  ditheredBits =
+    sierraDither(
+      blurred,
+      WIDTH,
+      HEIGHT
+    );
+
+
+  renderBits(
+    ditheredBits,
+    WIDTH,
+    HEIGHT
+  );
+
+
+  printBtn.disabled =
+    !dataCharacteristic;
+
+  log(
+    `Processed ${WIDTH}×${HEIGHT}`,
+    "ok"
+  );
+
+  log(
+    `Output: ${TOTAL_BYTES} bytes`
+  );
+}
+
+
+/* =========================================================
+ * BLUETOOTH CONNECT
+ * ========================================================= */
+
+connectBtn.addEventListener(
+  "click",
+  connectPrinter
+);
+
+
+async function connectPrinter(){
+
+  if(!navigator.bluetooth){
+
+    alert(
+      "這個瀏覽器不支援 Web Bluetooth。\n" +
+      "請使用桌面版 Chrome 或 Edge。"
+    );
+
+    return;
+  }
+
+
+  try{
+
+    log(
+      "Opening Bluetooth chooser..."
+    );
+
+
+    /*
+     * 不知道印表機名稱，
+     * 所以讓 Chrome 顯示 BLE 裝置。
+     *
+     * acceptAllDevices：
+     * 使用者在系統選擇器選印表機。
+     */
+
+    bluetoothDevice =
+      await navigator.bluetooth.requestDevice({
+
+        acceptAllDevices:true,
+
+        /*
+         * 這裡嘗試允許常見的 AE00 service。
+         * 如果你的實際 Service UUID 不同，
+         * 後面的 service discovery 會繼續尋找。
+         */
+
+        optionalServices:[
+          "0000ae00-0000-1000-8000-00805f9b34fb"
+        ]
+      });
+
+
+    printerName.textContent =
+      "DEVICE: " +
+      (bluetoothDevice.name || "Unknown");
+
+
+    bluetoothDevice.addEventListener(
+      "gattserverdisconnected",
+      onDisconnected
+    );
+
+
+    log(
+      "Selected: " +
+      (bluetoothDevice.name || "Unknown"),
+      "ok"
+    );
+
+
+    bluetoothServer =
+      await bluetoothDevice.gatt.connect();
+
+
+    log(
+      "GATT connected",
+      "ok"
+    );
+
+
+    /*
+     * 找出 AE01 / AE03。
+     */
+
+    await discoverCharacteristics();
+
+
+    btState.textContent =
+      "CONNECTED";
+
+    btState.classList.add(
+      "connected"
+    );
+
+    connectBtn.disabled =
+      true;
+
+    disconnectBtn.disabled =
+      false;
+
+    statusDot.classList.add(
+      "active"
+    );
+
+    statusText.textContent =
+      "SYSTEM READY";
+
+
+    if(ditheredBits)
+      printBtn.disabled=false;
+
+
+  }catch(error){
+
+    console.error(error);
+
+    log(
+      "BLE error: " +
+      error.message,
+      "err"
+    );
+
+    alert(
+      "BLE 連線失敗：\n" +
+      error.message
+    );
+  }
+}
+
+
+/* =========================================================
+ * DISCOVER AE01 / AE03
+ * ========================================================= */
+
+async function discoverCharacteristics(){
+
+  commandCharacteristic =
+    null;
+
+  dataCharacteristic =
+    null;
+
+
+  let services=[];
+
+  /*
+   * 嘗試取得所有 Primary Services。
+   */
+
+  try{
+
+    services =
+      await bluetoothServer.getPrimaryServices();
+
+  }catch(error){
+
+    log(
+      "getPrimaryServices failed: " +
+      error.message,
+      "err"
+    );
+
+    throw error;
+  }
+
+
+  log(
+    `Found ${services.length} GATT service(s)`
+  );
+
+
+  for(
+    const service of services
+  ){
+
+    log(
+      "Service: " +
+      service.uuid
+    );
+
+
+    let characteristics=[];
+
+
+    try{
+
+      characteristics =
+        await service.getCharacteristics();
+
+    }catch(error){
+
+      log(
+        "Cannot enumerate service " +
+        service.uuid
+      );
+
+      continue;
+    }
+
+
+    for(
+      const characteristic
+      of characteristics
+    ){
+
+      const uuid =
+        characteristic.uuid.toLowerCase();
+
+
+      log(
+        "  Characteristic: " +
+        uuid
+      );
+
+
+      if(
+        uuid ===
+        COMMAND_UUID.toLowerCase()
+      ){
+
+        commandCharacteristic =
+          characteristic;
+
+        log(
+          "AE01 command characteristic FOUND",
+          "ok"
+        );
+      }
+
+
+      if(
+        uuid ===
+        DATA_UUID.toLowerCase()
+      ){
+
+        dataCharacteristic =
+          characteristic;
+
+        log(
+          "AE03 data characteristic FOUND",
+          "ok"
+        );
+      }
+    }
+  }
+
+
+  if(
+    !commandCharacteristic ||
+    !dataCharacteristic
+  ){
+
+    throw new Error(
+      "找不到 AE01 / AE03 characteristic"
+    );
+  }
+
+
+  log(
+    "Printer protocol ready",
+    "ok"
+  );
+}
+
+
+/* =========================================================
+ * DISCONNECT
+ * ========================================================= */
+
+disconnectBtn.addEventListener(
+  "click",
+  () => {
+
+    if(
+      bluetoothDevice &&
+      bluetoothDevice.gatt.connected
+    ){
+
+      bluetoothDevice.gatt.disconnect();
+    }
+  }
+);
+
+
+function onDisconnected(){
+
+  btState.textContent =
+    "DISCONNECTED";
+
+  btState.classList.remove(
+    "connected"
+  );
+
+  connectBtn.disabled =
+    false;
+
+  disconnectBtn.disabled =
+    true;
+
+  printBtn.disabled =
+    true;
+
+  statusText.textContent =
+    "PRINTER DISCONNECTED";
+
+  log(
+    "Printer disconnected",
+    "err"
+  );
+}
+
+
+/* =========================================================
+ * BLE WRITE
+ * ========================================================= */
+
+async function writeCharacteristic(
+  characteristic,
+  bytes
+){
+
+  /*
+   * 優先使用 Write Without Response。
+   */
+
+  if(
+    characteristic.properties &&
+    characteristic.properties.writeWithoutResponse
+  ){
+
+    await characteristic.writeValueWithoutResponse(
+      bytes
+    );
+
+    return;
+  }
+
+
+  /*
+   * 如果沒有，
+   * 使用 Write With Response。
+   */
+
+  if(
+    characteristic.properties &&
+    characteristic.properties.write
+  ){
+
+    await characteristic.writeValueWithResponse(
+      bytes
+    );
+
+    return;
+  }
+
+
+  throw new Error(
+    "Characteristic is not writable"
+  );
+}
+
+
+/* =========================================================
+ * DELAY
+ * ========================================================= */
+
+function sleep(ms){
+
+  return new Promise(
+    resolve => setTimeout(
+      resolve,
+      ms
+    )
+  );
+}
+
+
+/* =========================================================
+ * HEX
+ * ========================================================= */
+
+function hexToBytes(hex){
+
+  const bytes =
+    new Uint8Array(
+      hex.length/2
+    );
+
+  for(
+    let i=0;
+    i<hex.length;
+    i+=2
+  ){
+
+    bytes[i/2] =
+      parseInt(
+        hex.substring(i,i+2),
+        16
+      );
+  }
+
+  return bytes;
+}
+
+
+/* =========================================================
+ * PRINT
+ * ========================================================= */
+
+printBtn.addEventListener(
+  "click",
+  printImage
+);
+
+
+async function printImage(){
+
+  if(!ditheredBits){
+
+    alert(
+      "請先拍攝並點陣化。"
+    );
+
+    return;
+  }
+
+
+  if(
+    !commandCharacteristic ||
+    !dataCharacteristic
+  ){
+
+    alert(
+      "請先連接 BLE 印表機。"
+    );
+
+    return;
+  }
+
+
+  try{
+
+    printBtn.disabled =
+      true;
+
+    captureBtn.disabled =
+      true;
+
+    progressWrap.style.display =
+      "block";
+
+    progressBar.style.width =
+      "0%";
+
+
+    log(
+      "========== PRINT START ==========",
+      "ok"
+    );
+
+
+    /*
+     * ==========================================
+     * AE01 INIT
+     * ==========================================
+     */
+
+    const initCommands=[
+
+      "2221a70000000000",
+
+      "2221b10001000000ff",
+
+      "2221a10001000000ff",
+
+      "2221a200010080017fff",
+
+      /*
+       * A9：
+       * 384 × 288
+       */
+      "2221a9000400012030000000"
+    ];
+
+
+    for(
+      const command
+      of initCommands
+    ){
+
+      const bytes =
+        hexToBytes(command);
+
+      log(
+        "AE01 → " +
+        command
+      );
+
+      await writeCharacteristic(
+        commandCharacteristic,
+        bytes
+      );
+
+      await sleep(
+        BLE_DELAY_COMMAND
+      );
+    }
+
+
+    /*
+     * ==========================================
+     * Convert 1-bit bitmap
+     *
+     * 384px / 8 = 48 bytes per line
+     *
+     * black = 1
+     * MSB first
+     * ==========================================
+     */
+
+    const bitmap =
+      packBitmap(
+        ditheredBits,
+        WIDTH,
+        HEIGHT
+      );
+
+
+    log(
+      `Bitmap packed: ${bitmap.length} bytes`,
+      "ok"
+    );
+
+
+    /*
+     * ==========================================
+     * 480-byte BLE chunks
+     *
+     * 480 bytes = 10 lines
+     * ==========================================
+     */
+
+    const totalChunks =
+      Math.ceil(
+        bitmap.length /
+        BLE_CHUNK_SIZE
+      );
+
+
+    for(
+      let offset=0,
+      chunkIndex=0;
+
+      offset<bitmap.length;
+
+      offset += BLE_CHUNK_SIZE,
+      chunkIndex++
+    ){
+
+      const end =
+        Math.min(
+          offset + BLE_CHUNK_SIZE,
+          bitmap.length
+        );
+
+
+      const chunk =
+        bitmap.slice(
+          offset,
+          end
+        );
+
+
+      await writeCharacteristic(
+        dataCharacteristic,
+        chunk
+      );
+
+
+      const progress =
+        Math.round(
+          end /
+          bitmap.length *
+          100
+        );
+
+
+      progressBar.style.width =
+        progress + "%";
+
+
+      progressText.textContent =
+        `PRINTING ${progress}% · ` +
+        `${chunkIndex+1}/${totalChunks} · ` +
+        `${end}/${bitmap.length} bytes`;
+
+
+      log(
+        `AE03 → chunk ${chunkIndex+1}/${totalChunks} (${chunk.length} bytes)`
+      );
+
+
+      await sleep(
+        BLE_DELAY_DATA
+      );
+    }
+
+
+    /*
+     * ==========================================
+     * END PRINT
+     * ==========================================
+     */
+
+    const endCommand =
+      hexToBytes(
+        "2221ad000100000000"
+      );
+
+
+    log(
+      "AE01 → END"
+    );
+
+
+    await writeCharacteristic(
+      commandCharacteristic,
+      endCommand
+    );
+
+
+    await sleep(
+      BLE_DELAY_COMMAND
+    );
+
+
+    progressBar.style.width =
+      "100%";
+
+    progressText.textContent =
+      "PRINT COMPLETE";
+
+
+    log(
+      "========== PRINT COMPLETE ==========",
+      "ok"
+    );
+
+
+  }catch(error){
+
+    console.error(error);
+
+    progressText.textContent =
+      "PRINT ERROR";
+
+    log(
+      "PRINT ERROR: " +
+      error.message,
+      "err"
+    );
+
+    alert(
+      "列印失敗：\n" +
+      error.message
+    );
+
+  }finally{
+
+    printBtn.disabled =
+      !dataCharacteristic;
+
+    captureBtn.disabled =
+      false;
+  }
+}
+
+
+/* =========================================================
+ * PACK 1-BIT
+ *
+ * 384 / 8 = 48 bytes
+ * 288 lines
+ * total = 13,824 bytes
+ *
+ * MSB first
+ * black = 1
+ * ========================================================= */
+
+function packBitmap(
+  bits,
+  width,
+  height
+){
+
+  const bytes =
+    new Uint8Array(
+      width/8*height
+    );
+
+
+  let offset=0;
+
+
+  for(
+    let y=0;
+    y<height;
+    y++
+  ){
+
+    for(
+      let x=0;
+      x<width;
+      x+=8
+    ){
+
+      let value=0;
+
+
+      for(
+        let bit=0;
+        bit<8;
+        bit++
+      ){
+
+        if(
+          bits[
+            y*width+x+bit
+          ]
+        ){
+
+          value |=
+            (1 << (7-bit));
+        }
+      }
+
+
+      bytes[offset++] =
+        value;
+    }
+  }
+
+
+  return bytes;
+}
+
+
+/* =========================================================
+ * GAUSSIAN BLUR 3×3
+ * ========================================================= */
+
+function gaussianBlur(
+  src,
+  width,
+  height
+){
+
+  const dst =
+    new Float32Array(
+      src.length
+    );
+
+
+  const kernel=[
+    1,2,1,
+    2,4,2,
+    1,2,1
+  ];
+
+
+  for(
+    let y=0;
+    y<height;
+    y++
+  ){
+
+    for(
+      let x=0;
+      x<width;
+      x++
+    ){
+
+      let sum=0;
+      let weight=0;
+
+
+      for(
+        let ky=-1;
+        ky<=1;
+        ky++
+      ){
+
+        const yy =
+          Math.max(
+            0,
+            Math.min(
+              height-1,
+              y+ky
+            )
+          );
+
+
+        for(
+          let kx=-1;
+          kx<=1;
+          kx++
+        ){
+
+          const xx =
+            Math.max(
+              0,
+              Math.min(
+                width-1,
+                x+kx
+              )
+            );
+
+
+          const k =
+            kernel[
+              (ky+1)*3+
+              (kx+1)
+            ];
+
+
+          sum +=
+            src[
+              yy*width+xx
+            ] * k;
+
+
+          weight += k;
+        }
+      }
+
+
+      dst[
+        y*width+x
+      ] =
+        sum/weight;
+    }
+  }
+
+
+  return dst;
+}
+
+
+/* =========================================================
+ * SOFTWARE CLAHE
+ *
+ * 8 × 8 tiles
+ * clip limit = alpha
+ * ========================================================= */
+
+function clahe(
+  data,
+  width,
+  height,
+  clipLimit
+){
+
+  const tilesX=8;
+  const tilesY=8;
+
+  const tileW =
+    Math.ceil(
+      width/tilesX
+    );
+
+  const tileH =
+    Math.ceil(
+      height/tilesY
+    );
+
+
+  const output =
+    new Float32Array(
+      data.length
+    );
+
+
+  for(
+    let ty=0;
+    ty<tilesY;
+    ty++
+  ){
+
+    for(
+      let tx=0;
+      tx<tilesX;
+      tx++
+    ){
+
+      const x0 =
+        tx*tileW;
+
+      const y0 =
+        ty*tileH;
+
+      const x1 =
+        Math.min(
+          width,
+          x0+tileW
+        );
+
+      const y1 =
+        Math.min(
+          height,
+          y0+tileH
+        );
+
+
+      const hist =
+        new Uint32Array(256);
+
+
+      let count=0;
+
+
+      for(
+        let y=y0;
+        y<y1;
+        y++
+      ){
+
+        for(
+          let x=x0;
+          x<x1;
+          x++
+        ){
+
+          const value =
+            Math.round(
+              clamp(
+                data[
+                  y*width+x
+                ]
+              )
+            );
+
+          hist[value]++;
+          count++;
+        }
+      }
+
+
+      const limit =
+        Math.max(
+          1,
+          Math.floor(
+            clipLimit *
+            count /
+            256
+          )
+        );
+
+
+      let excess=0;
+
+
+      for(
+        let i=0;
+        i<256;
+        i++
+      ){
+
+        if(hist[i]>limit){
+
+          excess +=
+            hist[i]-limit;
+
+          hist[i]=limit;
+        }
+      }
+
+
+      const redistribution =
+        Math.floor(
+          excess/256
+        );
+
+
+      const remainder =
+        excess%256;
+
+
+      for(
+        let i=0;
+        i<256;
+        i++
+      ){
+
+        hist[i] +=
+          redistribution;
+
+        if(i<remainder)
+          hist[i]++;
+      }
+
+
+      const cdf =
+        new Float32Array(256);
+
+
+      cdf[0]=hist[0];
+
+
+      for(
+        let i=1;
+        i<256;
+        i++
+      ){
+
+        cdf[i]=
+          cdf[i-1]+hist[i];
+      }
+
+
+      const cdfMin =
+        cdf[0];
+
+
+      for(
+        let y=y0;
+        y<y1;
+        y++
+      ){
+
+        for(
+          let x=x0;
+          x<x1;
+          x++
+        ){
+
+          const value =
+            Math.round(
+              clamp(
+                data[
+                  y*width+x
+                ]
+              )
+            );
+
+
+          output[
+            y*width+x
+          ] =
+            (
+              (cdf[value]-cdfMin) /
+              Math.max(
+                1,
+                count-cdfMin
+              )
+            )*255;
+        }
+      }
+    }
+  }
+
+
+  data.set(output);
+}
+
+
+/* =========================================================
+ * SHARPEN
+ *
+ * 0 -1 0
+ * -1 5 -1
+ * 0 -1 0
+ * ========================================================= */
+
+function sharpen(
+  data,
+  width,
+  height
+){
+
+  const src =
+    new Float32Array(
+      data
+    );
+
+
+  for(
+    let y=0;
+    y<height;
+    y++
+  ){
+
+    for(
+      let x=0;
+      x<width;
+      x++
+    ){
+
+      const center =
+        src[
+          y*width+x
+        ];
+
+
+      const up =
+        src[
+          Math.max(
+            0,
+            y-1
+          )*width+x
+        ];
+
+
+      const down =
+        src[
+          Math.min(
+            height-1,
+            y+1
+          )*width+x
+        ];
+
+
+      const left =
+        src[
+          y*width+
+          Math.max(
+            0,
+            x-1
+          )
+        ];
+
+
+      const right =
+        src[
+          y*width+
+          Math.min(
+            width-1,
+            x+1
+          )
+        ];
+
+
+      data[
+        y*width+x
+      ] =
+        clamp(
+          5*center -
+          up -
+          down -
+          left -
+          right
+        );
+    }
+  }
+}
+
+
+/* =========================================================
+ * SIERRA DITHER
+ *
+ *        X  5  3
+ *
+ *    2  4  5  4  2
+ *
+ *       2  3  2
+ *
+ * /32
+ * ========================================================= */
+
+function sierraDither(
+  src,
+  width,
+  height
+){
+
+  const data =
+    new Float32Array(
+      src
+    );
+
+
+  const dx=[
+    1,2,
+    -2,-1,0,1,2,
+    -1,0,1
+  ];
+
+
+  const dy=[
+    0,0,
+    1,1,1,1,1,
+    2,2,2
+  ];
+
+
+  const weights=[
+    5,3,
+    2,4,5,4,2,
+    2,3,2
+  ];
+
+
+  const bits =
+    new Uint8Array(
+      width*height
+    );
+
+
+  for(
+    let y=0;
+    y<height;
+    y++
+  ){
+
+    for(
+      let x=0;
+      x<width;
+      x++
+    ){
+
+      const index =
+        y*width+x;
+
+
+      const oldPixel =
+        clamp(
+          data[index]
+        );
+
+
+      const newPixel =
+        oldPixel < 128
+          ? 0
+          : 255;
+
+
+      /*
+       * black = 1
+       */
+
+      bits[index] =
+        newPixel === 0
+          ? 1
+          : 0;
+
+
+      const error =
+        oldPixel-newPixel;
+
+
+      for(
+        let i=0;
+        i<10;
+        i++
+      ){
+
+        const nx =
+          x+dx[i];
+
+        const ny =
+          y+dy[i];
+
+
+        if(
+          nx<0 ||
+          nx>=width ||
+          ny<0 ||
+          ny>=height
+        )
+          continue;
+
+
+        data[
+          ny*width+nx
+        ] +=
+          error*
+          weights[i]/
+          32;
+      }
+    }
+  }
+
+
+  return bits;
+}
+
+
+/* =========================================================
+ * RENDER 1-BIT
+ * ========================================================= */
+
+function renderBits(
+  bits,
+  width,
+  height
+){
+
+  const image =
+    outCtx.createImageData(
+      width,
+      height
+    );
+
+
+  for(
+    let i=0;
+    i<bits.length;
+    i++
+  ){
+
+    const value =
+      bits[i]
+        ? 0
+        : 255;
+
+
+    image.data[i*4] =
+      value;
+
+    image.data[i*4+1] =
+      value;
+
+    image.data[i*4+2] =
+      value;
+
+    image.data[i*4+3] =
+      255;
+  }
+
+
+  outCtx.putImageData(
+    image,
+    0,
+    0
+  );
+}
+
+
+/* =========================================================
+ * UTILS
+ * ========================================================= */
+
+function clamp(value){
+
+  return Math.max(
+    0,
+    Math.min(
+      255,
+      value
+    )
+  );
+}
+
+
+/* =========================================================
+ * INITIAL LOG
+ * ========================================================= */
+
+log(
+  "RetroCam BLE Prototype ready",
+  "ok"
+);
+
+log(
+  `Target: ${WIDTH}×${HEIGHT}`
+);
+
+log(
+  `BLE payload: ${TOTAL_BYTES} bytes`
+);
+
+log(
+  `Chunk: ${BLE_CHUNK_SIZE} bytes`
+);
+
+</script>
+
+</body>
+</html>
