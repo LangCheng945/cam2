@@ -1131,7 +1131,7 @@ footer {
   </div>
 
   <div class="step">
-    CLAHE
+    CLAHE 2×2
   </div>
 
   <div class="arrow">
@@ -1821,12 +1821,54 @@ async function captureAndProcess() {
    * ENHANCE
    * ======================================================= */
 
+  /*
+   * APK getEnhancedParam()
+   *
+   * 注意：
+   * enhancedImage() 的 alpha 判斷使用
+   * Gamma transformation 後的影像平均值。
+   */
+  let gammaMean = 0;
+
+  for (
+    let i = 0;
+
+    i < blurred.length;
+
+    i++
+  ) {
+
+    gammaMean +=
+      blurred[i];
+
+  }
+
+  gammaMean /=
+    blurred.length;
+
+
   const alpha =
-    mean < 200
+    gammaMean < 200
       ? 1.07
       : 1.06;
 
 
+  log(
+    `Enhanced mean: ${gammaMean.toFixed(2)}`
+  );
+
+
+  /*
+   * OpenCV convertScaleAbs(
+   *   src,
+   *   dst,
+   *   alpha,
+   *   0.0
+   * )
+   *
+   * Browser 版以等價的
+   * saturate + round 行為模擬。
+   */
   for (
     let i = 0;
 
@@ -1837,8 +1879,10 @@ async function captureAndProcess() {
 
     blurred[i] =
       clamp(
-        alpha *
-        blurred[i]
+        Math.round(
+          alpha *
+          blurred[i]
+        )
       );
 
   }
@@ -1847,6 +1891,11 @@ async function captureAndProcess() {
   /* =======================================================
    * CLAHE
    * ======================================================= */
+
+  log(
+    `CLAHE: 2×2 / clipLimit=${alpha.toFixed(2)}`
+  );
+
 
   clahe(
     blurred,
@@ -3276,31 +3325,43 @@ function clahe(
   clipLimit
 ) {
 
-  const tilesX =
-    8;
+  /*
+   * APK evidence:
+   *
+   * Imgproc.createCLAHE(
+   *   clipLimit,
+   *   Size(2.0, 2.0)
+   * )
+   *
+   * 所以這裡必須是 2 × 2，
+   * 不是原本的 8 × 8。
+   *
+   * 384 × 288 可整除 2 × 2，
+   * 因此每個 tile = 192 × 144。
+   */
 
+  const tilesX =
+    2;
 
   const tilesY =
-    8;
-
+    2;
 
   const tileW =
-    Math.ceil(
-      width /
-      tilesX
-    );
-
+    width /
+    tilesX;
 
   const tileH =
-    Math.ceil(
-      height /
-      tilesY
-    );
+    height /
+    tilesY;
 
 
-  const output =
-    new Float32Array(
-      data.length
+  /*
+   * 每個 tile 建立 OpenCV CLAHE
+   * 類似的 256-bin LUT。
+   */
+  const luts =
+    new Array(
+      tilesX * tilesY
     );
 
 
@@ -3323,33 +3384,24 @@ function clahe(
       const x0 =
         tx * tileW;
 
-
       const y0 =
         ty * tileH;
 
-
       const x1 =
-        Math.min(
-          width,
-          x0 + tileW
-        );
-
+        x0 + tileW;
 
       const y1 =
-        Math.min(
-          height,
-          y0 + tileH
-        );
+        y0 + tileH;
+
+
+      const tilePixels =
+        tileW * tileH;
 
 
       const hist =
         new Uint32Array(
           256
         );
-
-
-      let count =
-        0;
 
 
       for (
@@ -3381,25 +3433,29 @@ function clahe(
 
           hist[value]++;
 
-          count++;
-
         }
 
       }
 
 
-      const limit =
+      /*
+       * OpenCV CLAHE：
+       * clipLimit 會依 tile area 正規化。
+       */
+      const clip =
         Math.max(
           1,
-
           Math.floor(
             clipLimit *
-            count /
+            tilePixels /
             256
           )
         );
 
 
+      /*
+       * Clip histogram
+       */
       let excess =
         0;
 
@@ -3414,22 +3470,27 @@ function clahe(
 
         if (
           hist[i] >
-          limit
+          clip
         ) {
 
           excess +=
             hist[i] -
-            limit;
-
+            clip;
 
           hist[i] =
-            limit;
+            clip;
 
         }
 
       }
 
 
+      /*
+       * OpenCV CLAHE 的 redistribution。
+       *
+       * 使用平均分配，
+       * 剩餘量再依 histogram bin 分配。
+       */
       const redistribution =
         Math.floor(
           excess /
@@ -3453,9 +3514,9 @@ function clahe(
         hist[i] +=
           redistribution;
 
-
         if (
-          i < remainder
+          i <
+          remainder
         ) {
 
           hist[i]++;
@@ -3465,93 +3526,248 @@ function clahe(
       }
 
 
-      const cdf =
-        new Float32Array(
+      /*
+       * 建立 LUT。
+       */
+      const lut =
+        new Uint8Array(
           256
         );
 
 
-      cdf[0] =
-        hist[0];
+      let cdf =
+        0;
 
 
       for (
-        let i = 1;
+        let i = 0;
 
         i < 256;
 
         i++
       ) {
 
-        cdf[i] =
-          cdf[i - 1] +
+        cdf +=
           hist[i];
 
+
+        /*
+         * OpenCV CLAHE 最後會
+         * saturate_cast<uchar>()。
+         */
+        lut[i] =
+          Math.max(
+            0,
+            Math.min(
+              255,
+              Math.round(
+                cdf *
+                255 /
+                tilePixels
+              )
+            )
+          );
+
       }
 
 
-      const cdfMin =
-        cdf[0];
-
-
-      for (
-        let y = y0;
-
-        y < y1;
-
-        y++
-      ) {
-
-        for (
-          let x = x0;
-
-          x < x1;
-
-          x++
-        ) {
-
-          const value =
-            Math.round(
-              clamp(
-                data[
-                  y * width +
-                  x
-                ]
-              )
-            );
-
-
-          output[
-            y * width +
-            x
-          ] =
-            (
-              (
-                cdf[value] -
-                cdfMin
-              ) /
-              Math.max(
-                1,
-                count -
-                cdfMin
-              )
-            ) * 255;
-
-        }
-
-      }
+      luts[
+        ty * tilesX +
+        tx
+      ] =
+        lut;
 
     }
 
   }
 
 
-  data.set(
-    output
-  );
+  /*
+   * OpenCV CLAHE 使用 tile LUT
+   * 對影像做雙線性插值。
+   *
+   * tile center：
+   *   96, 240
+   *   72, 216
+   */
+  const halfTileW =
+    tileW / 2;
+
+  const halfTileH =
+    tileH / 2;
+
+
+  for (
+    let y = 0;
+
+    y < height;
+
+    y++
+  ) {
+
+    /*
+     * 對應 OpenCV tile center 的座標。
+     */
+    const gy =
+      (y + 0.5) /
+      tileH -
+      0.5;
+
+
+    const yBase =
+      Math.floor(
+        gy
+      );
+
+    const fy =
+      gy -
+      yBase;
+
+
+    const y0 =
+      Math.max(
+        0,
+        Math.min(
+          tilesY - 1,
+          yBase
+        )
+      );
+
+    const y1 =
+      Math.max(
+        0,
+        Math.min(
+          tilesY - 1,
+          yBase + 1
+        )
+      );
+
+
+    const wy =
+      Math.max(
+        0,
+        Math.min(
+          1,
+          fy
+        )
+      );
+
+
+    for (
+      let x = 0;
+
+      x < width;
+
+      x++
+    ) {
+
+      const gx =
+        (x + 0.5) /
+        tileW -
+        0.5;
+
+
+      const xBase =
+        Math.floor(
+          gx
+        );
+
+      const fx =
+        gx -
+        xBase;
+
+
+      const x0 =
+        Math.max(
+          0,
+          Math.min(
+            tilesX - 1,
+            xBase
+          )
+        );
+
+      const x1 =
+        Math.max(
+          0,
+          Math.min(
+            tilesX - 1,
+            xBase + 1
+          )
+        );
+
+
+      const wx =
+        Math.max(
+          0,
+          Math.min(
+            1,
+            fx
+          )
+        );
+
+
+      const value =
+        Math.round(
+          clamp(
+            data[
+              y * width +
+              x
+            ]
+          )
+        );
+
+
+      const lut00 =
+        luts[
+          y0 * tilesX +
+          x0
+        ][value];
+
+      const lut10 =
+        luts[
+          y0 * tilesX +
+          x1
+        ][value];
+
+      const lut01 =
+        luts[
+          y1 * tilesX +
+          x0
+        ][value];
+
+      const lut11 =
+        luts[
+          y1 * tilesX +
+          x1
+        ][value];
+
+
+      const top =
+        lut00 +
+        (lut10 - lut00) *
+        wx;
+
+      const bottom =
+        lut01 +
+        (lut11 - lut01) *
+        wx;
+
+
+      data[
+        y * width +
+        x
+      ] =
+        clamp(
+          top +
+          (bottom - top) *
+          wy
+        );
+
+    }
+
+  }
 
 }
-
 
 /* =========================================================
  * SHARPEN
