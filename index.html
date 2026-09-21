@@ -1147,7 +1147,7 @@ footer {
   </div>
 
   <div class="step">
-    SIERRA
+    THRESHOLD < 128
   </div>
 
   <div class="arrow">
@@ -1922,15 +1922,28 @@ async function captureAndProcess() {
 
 
   /* =======================================================
-   * SIERRA
+   * TEST：暫時停用 Sierra
+   * 直接使用 APK px2Byte 的 < 128 二值化
+   * 用來確認雜點是否主要由 Sierra 誤差擴散造成。
    * ======================================================= */
 
   ditheredBits =
-    sierraDither(
-      blurred,
-      WIDTH,
-      HEIGHT
+    new Uint8Array(
+      WIDTH * HEIGHT
     );
+
+  for (
+    let i = 0;
+    i < blurred.length;
+    i++
+  ) {
+
+    ditheredBits[i] =
+      blurred[i] < 128
+        ? 1
+        : 0;
+
+  }
 
 
   /* =======================================================
