@@ -53,7 +53,6 @@ header{
   margin:5px 0 0;
   font-size:30px;
   letter-spacing:.08em;
-  font-weight:700;
 }
 
 .status{
@@ -218,32 +217,6 @@ button.print{
 .info-item strong{
   font-family:monospace;
   font-size:12px;
-  color:#dce5df;
-}
-
-.progress-wrap{
-  margin-top:15px;
-  display:none;
-}
-
-.progress-bg{
-  height:5px;
-  background:#222824;
-  border-radius:99px;
-  overflow:hidden;
-}
-
-.progress-bar{
-  height:100%;
-  width:0%;
-  background:var(--accent);
-  transition:width .1s linear;
-}
-
-.progress-text{
-  margin-top:7px;
-  font:10px monospace;
-  color:var(--muted);
 }
 
 .bluetooth{
@@ -286,7 +259,7 @@ button.print{
 
 .log{
   margin-top:12px;
-  height:100px;
+  height:180px;
   overflow:auto;
   background:#070908;
   border:1px solid #202722;
@@ -302,6 +275,31 @@ button.print{
 
 .log .err{
   color:var(--danger);
+}
+
+.progress-wrap{
+  margin-top:15px;
+  display:none;
+}
+
+.progress-bg{
+  height:5px;
+  background:#222824;
+  border-radius:99px;
+  overflow:hidden;
+}
+
+.progress-bar{
+  height:100%;
+  width:0%;
+  background:var(--accent);
+  transition:width .1s linear;
+}
+
+.progress-text{
+  margin-top:7px;
+  font:10px monospace;
+  color:var(--muted);
 }
 
 .pipeline{
@@ -324,7 +322,6 @@ button.print{
 
 .arrow{
   color:var(--accent);
-  font-size:12px;
 }
 
 footer{
@@ -385,6 +382,7 @@ footer{
   </div>
 
   <div class="controls">
+
     <button id="startBtn" class="primary">
       啟用相機
     </button>
@@ -392,6 +390,7 @@ footer{
     <button id="captureBtn" disabled>
       拍攝並點陣化
     </button>
+
   </div>
 
 </section>
@@ -409,19 +408,28 @@ footer{
   </div>
 
   <div class="controls">
+
     <button id="printBtn" class="print" disabled>
       🖨 列印
     </button>
+
   </div>
 
   <div class="progress-wrap" id="progressWrap">
+
     <div class="progress-bg">
-      <div class="progress-bar" id="progressBar"></div>
+      <div
+        class="progress-bar"
+        id="progressBar">
+      </div>
     </div>
 
-    <div class="progress-text" id="progressText">
+    <div
+      class="progress-text"
+      id="progressText">
       READY
     </div>
+
   </div>
 
 </section>
@@ -462,33 +470,59 @@ footer{
 <div class="bluetooth">
 
   <div class="bt-header">
+
     <span class="bt-title">
       BLUETOOTH THERMAL PRINTER
     </span>
 
-    <span id="btState" class="bt-state">
+    <span
+      id="btState"
+      class="bt-state">
       DISCONNECTED
     </span>
+
   </div>
 
   <div class="controls">
-    <button id="connectBtn" class="primary">
+
+    <button
+      id="connectBtn"
+      class="primary">
       🔵 連接印表機
     </button>
 
-    <button id="disconnectBtn" disabled>
+    <button
+      id="disconnectBtn"
+      disabled>
       中斷連線
     </button>
+
   </div>
 
   <div class="bt-info">
-    <span id="printerName">DEVICE: —</span>
-    <span>MAC: 48:0F:57:47:4E:87</span>
-    <span>COMMAND: AE01</span>
-    <span>DATA: AE03</span>
+
+    <span id="printerName">
+      DEVICE: —
+    </span>
+
+    <span>
+      MAC: 48:0F:57:47:4E:87
+    </span>
+
+    <span>
+      COMMAND: AE01
+    </span>
+
+    <span>
+      DATA: AE03
+    </span>
+
   </div>
 
-  <div class="log" id="log"></div>
+  <div
+    class="log"
+    id="log">
+  </div>
 
 </div>
 
@@ -541,21 +575,13 @@ footer{
 
 /* =========================================================
  * RETROCAM
- * Camera → APK-like Image Pipeline
- * → Sierra Dither
- * → BLE Thermal Printer
  * ========================================================= */
-
-
-/* =========================
- * CONSTANTS
- * ========================= */
 
 const WIDTH = 384;
 const HEIGHT = 288;
 
 const BYTES_PER_LINE = 48;
-const TOTAL_BYTES = WIDTH / 8 * HEIGHT;
+const TOTAL_BYTES = 13824;
 
 const BLE_CHUNK_SIZE = 480;
 
@@ -565,13 +591,30 @@ const COMMAND_UUID =
 const DATA_UUID =
   "0000ae03-0000-1000-8000-00805f9b34fb";
 
+const POSSIBLE_SERVICE_UUIDS = [
+
+  /*
+   * 已知最可能的 AE00 service
+   */
+  "0000ae00-0000-1000-8000-00805f9b34fb",
+
+  /*
+   * 先保留其他可能性，
+   * 用來探測實際 GATT 結構
+   */
+  "0000ae01-0000-1000-8000-00805f9b34fb",
+
+  "0000ae03-0000-1000-8000-00805f9b34fb"
+
+];
+
 const BLE_DELAY_COMMAND = 300;
 const BLE_DELAY_DATA = 60;
 
 
-/* =========================
+/* =========================================================
  * DOM
- * ========================= */
+ * ========================================================= */
 
 const video =
   document.getElementById("video");
@@ -619,9 +662,9 @@ const progressText =
   document.getElementById("progressText");
 
 
-/* =========================
- * CAMERA
- * ========================= */
+/* =========================================================
+ * CANVAS
+ * ========================================================= */
 
 const srcCanvas =
   document.createElement("canvas");
@@ -629,21 +672,25 @@ const srcCanvas =
 const srcCtx =
   srcCanvas.getContext(
     "2d",
-    {willReadFrequently:true}
+    {
+      willReadFrequently:true
+    }
   );
 
 const outCtx =
   output.getContext(
     "2d",
-    {willReadFrequently:true}
+    {
+      willReadFrequently:true
+    }
   );
 
+
+/* =========================================================
+ * STATE
+ * ========================================================= */
+
 let cameraStream = null;
-
-
-/* =========================
- * BLE
- * ========================= */
 
 let bluetoothDevice = null;
 let bluetoothServer = null;
@@ -666,8 +713,9 @@ function log(message,type=""){
   line.textContent =
     `[${new Date().toLocaleTimeString()}] ${message}`;
 
-  if(type)
+  if(type){
     line.className = type;
+  }
 
   logElement.appendChild(line);
 
@@ -679,7 +727,7 @@ function log(message,type=""){
 
 
 /* =========================================================
- * CAMERA START
+ * CAMERA
  * ========================================================= */
 
 startBtn.addEventListener(
@@ -700,10 +748,14 @@ startBtn.addEventListener(
           audio:false
         });
 
+
       video.srcObject =
         cameraStream;
 
-      statusDot.classList.add("active");
+
+      statusDot.classList.add(
+        "active"
+      );
 
       statusText.textContent =
         "CAMERA ONLINE";
@@ -713,6 +765,7 @@ startBtn.addEventListener(
 
       captureBtn.disabled =
         false;
+
 
       log(
         "Camera connected",
@@ -727,13 +780,13 @@ startBtn.addEventListener(
         "CAMERA ERROR";
 
       log(
-        "Camera error: " + error.message,
+        "Camera error: " +
+        error.message,
         "err"
       );
 
       alert(
-        "無法取得攝影機。\n" +
-        "請確認瀏覽器已允許相機權限。"
+        "無法取得攝影機。"
       );
     }
 
@@ -753,10 +806,15 @@ captureBtn.addEventListener(
 
 async function captureAndProcess(){
 
-  if(!video.videoWidth)
+  if(!video.videoWidth){
     return;
+  }
 
-  log("Capturing frame...");
+
+  log(
+    "Capturing frame..."
+  );
+
 
   srcCanvas.width =
     WIDTH;
@@ -764,10 +822,6 @@ async function captureAndProcess(){
   srcCanvas.height =
     HEIGHT;
 
-  /*
-   * 模擬 ESP32-CAM：
-   * Camera → VGA → 384×288
-   */
 
   srcCtx.drawImage(
     video,
@@ -777,6 +831,7 @@ async function captureAndProcess(){
     HEIGHT
   );
 
+
   const image =
     srcCtx.getImageData(
       0,
@@ -785,18 +840,18 @@ async function captureAndProcess(){
       HEIGHT
     );
 
+
   const data =
     image.data;
 
+
   const gray =
     new Float32Array(
-      WIDTH * HEIGHT
+      WIDTH*HEIGHT
     );
 
 
-  /* =========================
-   * RGB → GRAY
-   * ========================= */
+  /* RGB → GRAY */
 
   for(
     let i=0,p=0;
@@ -809,15 +864,13 @@ async function captureAndProcess(){
     const b=data[i+2];
 
     gray[p] =
-      0.299*r +
-      0.587*g +
+      0.299*r+
+      0.587*g+
       0.114*b;
   }
 
 
-  /* =========================
-   * Gaussian Blur
-   * ========================= */
+  /* Gaussian */
 
   const blurred =
     gaussianBlur(
@@ -827,50 +880,48 @@ async function captureAndProcess(){
     );
 
 
-  /* =========================
-   * MEAN
-   * ========================= */
+  /* Mean */
 
-  let mean = 0;
+  let mean=0;
 
   for(
     let i=0;
     i<blurred.length;
     i++
   ){
-    mean += blurred[i];
+
+    mean +=
+      blurred[i];
   }
 
   mean /=
     blurred.length;
 
 
-  /* =========================
-   * APK GAMMA
-   * ========================= */
+  /* Gamma */
 
   let gamma;
 
-  if(mean < 130)
-    gamma = 0.90;
+  if(mean<130)
+    gamma=0.90;
 
-  else if(mean < 170)
-    gamma = 0.95;
+  else if(mean<170)
+    gamma=0.95;
 
-  else if(mean < 180)
-    gamma = 1.00;
+  else if(mean<180)
+    gamma=1.00;
 
-  else if(mean < 190)
-    gamma = 1.05;
+  else if(mean<190)
+    gamma=1.05;
 
-  else if(mean < 210)
-    gamma = 1.10;
+  else if(mean<210)
+    gamma=1.10;
 
-  else if(mean < 240)
-    gamma = 1.20;
+  else if(mean<240)
+    gamma=1.20;
 
   else
-    gamma = 1.30;
+    gamma=1.30;
 
 
   for(
@@ -884,19 +935,18 @@ async function captureAndProcess(){
         Math.pow(
           blurred[i]/255,
           1/gamma
-        ) * 255
+        )*255
       );
   }
 
 
-  /* =========================
-   * ENHANCE
-   * ========================= */
+  /* Enhance */
 
   const alpha =
-    mean < 200
+    mean<200
       ? 1.07
       : 1.06;
+
 
   for(
     let i=0;
@@ -907,15 +957,13 @@ async function captureAndProcess(){
     blurred[i] =
       clamp(
         Math.abs(
-          alpha * blurred[i]
+          alpha*blurred[i]
         )
       );
   }
 
 
-  /* =========================
-   * CLAHE
-   * ========================= */
+  /* CLAHE */
 
   clahe(
     blurred,
@@ -925,9 +973,7 @@ async function captureAndProcess(){
   );
 
 
-  /* =========================
-   * SHARPEN
-   * ========================= */
+  /* Sharpen */
 
   sharpen(
     blurred,
@@ -936,9 +982,7 @@ async function captureAndProcess(){
   );
 
 
-  /* =========================
-   * SIERRA
-   * ========================= */
+  /* Sierra */
 
   ditheredBits =
     sierraDither(
@@ -955,8 +999,10 @@ async function captureAndProcess(){
   );
 
 
-  printBtn.disabled =
-    !dataCharacteristic;
+  if(dataCharacteristic){
+    printBtn.disabled=false;
+  }
+
 
   log(
     `Processed ${WIDTH}×${HEIGHT}`,
@@ -964,13 +1010,13 @@ async function captureAndProcess(){
   );
 
   log(
-    `Output: ${TOTAL_BYTES} bytes`
+    `Output ${TOTAL_BYTES} bytes`
   );
 }
 
 
 /* =========================================================
- * BLUETOOTH CONNECT
+ * BLE CONNECT
  * ========================================================= */
 
 connectBtn.addEventListener(
@@ -984,8 +1030,8 @@ async function connectPrinter(){
   if(!navigator.bluetooth){
 
     alert(
-      "這個瀏覽器不支援 Web Bluetooth。\n" +
-      "請使用桌面版 Chrome 或 Edge。"
+      "目前瀏覽器不支援 Web Bluetooth。\n" +
+      "請使用 Chrome / Edge。"
     );
 
     return;
@@ -1000,11 +1046,13 @@ async function connectPrinter(){
 
 
     /*
-     * 不知道印表機名稱，
-     * 所以讓 Chrome 顯示 BLE 裝置。
+     * IMPORTANT
      *
-     * acceptAllDevices：
-     * 使用者在系統選擇器選印表機。
+     * acceptAllDevices 必須搭配
+     * optionalServices。
+     *
+     * 這裡把我們目前已知/可能的
+     * Service UUID 全部列入。
      */
 
     bluetoothDevice =
@@ -1012,33 +1060,32 @@ async function connectPrinter(){
 
         acceptAllDevices:true,
 
-        /*
-         * 這裡嘗試允許常見的 AE00 service。
-         * 如果你的實際 Service UUID 不同，
-         * 後面的 service discovery 會繼續尋找。
-         */
-
-        optionalServices:[
-          "0000ae00-0000-1000-8000-00805f9b34fb"
-        ]
+        optionalServices:
+          POSSIBLE_SERVICE_UUIDS
       });
 
 
     printerName.textContent =
       "DEVICE: " +
-      (bluetoothDevice.name || "Unknown");
+      (
+        bluetoothDevice.name ||
+        "Unknown"
+      );
+
+
+    log(
+      "Selected: " +
+      (
+        bluetoothDevice.name ||
+        "Unknown"
+      ),
+      "ok"
+    );
 
 
     bluetoothDevice.addEventListener(
       "gattserverdisconnected",
       onDisconnected
-    );
-
-
-    log(
-      "Selected: " +
-      (bluetoothDevice.name || "Unknown"),
-      "ok"
     );
 
 
@@ -1052,50 +1099,56 @@ async function connectPrinter(){
     );
 
 
-    /*
-     * 找出 AE01 / AE03。
-     */
-
-    await discoverCharacteristics();
+    await discoverKnownServices();
 
 
-    btState.textContent =
-      "CONNECTED";
+    if(
+      commandCharacteristic &&
+      dataCharacteristic
+    ){
 
-    btState.classList.add(
-      "connected"
-    );
+      btState.textContent =
+        "CONNECTED";
 
-    connectBtn.disabled =
-      true;
+      btState.classList.add(
+        "connected"
+      );
 
-    disconnectBtn.disabled =
-      false;
+      connectBtn.disabled =
+        true;
 
-    statusDot.classList.add(
-      "active"
-    );
+      disconnectBtn.disabled =
+        false;
 
-    statusText.textContent =
-      "SYSTEM READY";
+      statusDot.classList.add(
+        "active"
+      );
+
+      statusText.textContent =
+        "SYSTEM READY";
 
 
-    if(ditheredBits)
-      printBtn.disabled=false;
+      if(ditheredBits){
+        printBtn.disabled=false;
+      }
 
+    }
 
   }catch(error){
 
     console.error(error);
 
     log(
-      "BLE error: " +
+      "BLE ERROR: " +
       error.message,
       "err"
     );
 
+    btState.textContent =
+      "ERROR";
+
     alert(
-      "BLE 連線失敗：\n" +
+      "BLE 連線 / GATT 探測失敗：\n\n" +
       error.message
     );
   }
@@ -1103,10 +1156,10 @@ async function connectPrinter(){
 
 
 /* =========================================================
- * DISCOVER AE01 / AE03
+ * DISCOVER SERVICES
  * ========================================================= */
 
-async function discoverCharacteristics(){
+async function discoverKnownServices(){
 
   commandCharacteristic =
     null;
@@ -1115,125 +1168,190 @@ async function discoverCharacteristics(){
     null;
 
 
-  let services=[];
-
   /*
-   * 嘗試取得所有 Primary Services。
+   * 逐個測試已知 Service UUID。
    */
 
-  try{
-
-    services =
-      await bluetoothServer.getPrimaryServices();
-
-  }catch(error){
-
-    log(
-      "getPrimaryServices failed: " +
-      error.message,
-      "err"
-    );
-
-    throw error;
-  }
-
-
-  log(
-    `Found ${services.length} GATT service(s)`
-  );
-
-
   for(
-    const service of services
+    const serviceUUID
+    of POSSIBLE_SERVICE_UUIDS
   ){
-
-    log(
-      "Service: " +
-      service.uuid
-    );
-
-
-    let characteristics=[];
-
 
     try{
 
-      characteristics =
-        await service.getCharacteristics();
+      log(
+        "Trying service: " +
+        serviceUUID
+      );
+
+
+      const service =
+        await bluetoothServer.getPrimaryService(
+          serviceUUID
+        );
+
+
+      log(
+        "SERVICE FOUND: " +
+        service.uuid,
+        "ok"
+      );
+
+
+      await inspectService(
+        service
+      );
+
 
     }catch(error){
 
       log(
-        "Cannot enumerate service " +
-        service.uuid
+        "Service unavailable: " +
+        serviceUUID
       );
-
-      continue;
     }
 
 
-    for(
-      const characteristic
-      of characteristics
+    /*
+     * 找齊就不用繼續。
+     */
+
+    if(
+      commandCharacteristic &&
+      dataCharacteristic
     ){
 
-      const uuid =
-        characteristic.uuid.toLowerCase();
-
-
-      log(
-        "  Characteristic: " +
-        uuid
-      );
-
-
-      if(
-        uuid ===
-        COMMAND_UUID.toLowerCase()
-      ){
-
-        commandCharacteristic =
-          characteristic;
-
-        log(
-          "AE01 command characteristic FOUND",
-          "ok"
-        );
-      }
-
-
-      if(
-        uuid ===
-        DATA_UUID.toLowerCase()
-      ){
-
-        dataCharacteristic =
-          characteristic;
-
-        log(
-          "AE03 data characteristic FOUND",
-          "ok"
-        );
-      }
+      break;
     }
   }
 
+
+  /*
+   * 如果還是找不到，
+   * 顯示目前狀態。
+   */
 
   if(
     !commandCharacteristic ||
     !dataCharacteristic
   ){
 
+    log(
+      "AE01 / AE03 not found.",
+      "err"
+    );
+
+    log(
+      "需要確認 AE01 / AE03 所屬 Service UUID。",
+      "err"
+    );
+
     throw new Error(
-      "找不到 AE01 / AE03 characteristic"
+      "找不到 AE01 / AE03。請把 GATT Service UUID 給我。"
     );
   }
 
 
   log(
-    "Printer protocol ready",
+    "AE01 / AE03 READY",
     "ok"
   );
+}
+
+
+/* =========================================================
+ * INSPECT SERVICE
+ * ========================================================= */
+
+async function inspectService(
+  service
+){
+
+  let characteristics;
+
+
+  try{
+
+    characteristics =
+      await service.getCharacteristics();
+
+  }catch(error){
+
+    log(
+      "Cannot enumerate characteristics: " +
+      error.message,
+      "err"
+    );
+
+    return;
+  }
+
+
+  log(
+    `Characteristics: ${characteristics.length}`
+  );
+
+
+  for(
+    const characteristic
+    of characteristics
+  ){
+
+    const uuid =
+      characteristic.uuid.toLowerCase();
+
+
+    const properties =
+      characteristic.properties;
+
+
+    log(
+      "CHARACTERISTIC: " +
+      uuid
+    );
+
+
+    log(
+      "  read=" +
+      !!properties.read +
+      " write=" +
+      !!properties.write +
+      " writeNR=" +
+      !!properties.writeWithoutResponse +
+      " notify=" +
+      !!properties.notify
+    );
+
+
+    if(
+      uuid ===
+      COMMAND_UUID.toLowerCase()
+    ){
+
+      commandCharacteristic =
+        characteristic;
+
+      log(
+        "AE01 COMMAND FOUND",
+        "ok"
+      );
+    }
+
+
+    if(
+      uuid ===
+      DATA_UUID.toLowerCase()
+    ){
+
+      dataCharacteristic =
+        characteristic;
+
+      log(
+        "AE03 DATA FOUND",
+        "ok"
+      );
+    }
+  }
 }
 
 
@@ -1247,6 +1365,7 @@ disconnectBtn.addEventListener(
 
     if(
       bluetoothDevice &&
+      bluetoothDevice.gatt &&
       bluetoothDevice.gatt.connected
     ){
 
@@ -1293,43 +1412,38 @@ async function writeCharacteristic(
   bytes
 ){
 
-  /*
-   * 優先使用 Write Without Response。
-   */
+  const properties =
+    characteristic.properties;
+
 
   if(
-    characteristic.properties &&
-    characteristic.properties.writeWithoutResponse
+    properties.writeWithoutResponse
   ){
 
-    await characteristic.writeValueWithoutResponse(
-      bytes
-    );
+    await characteristic
+      .writeValueWithoutResponse(
+        bytes
+      );
 
     return;
   }
 
 
-  /*
-   * 如果沒有，
-   * 使用 Write With Response。
-   */
-
   if(
-    characteristic.properties &&
-    characteristic.properties.write
+    properties.write
   ){
 
-    await characteristic.writeValueWithResponse(
-      bytes
-    );
+    await characteristic
+      .writeValueWithResponse(
+        bytes
+      );
 
     return;
   }
 
 
   throw new Error(
-    "Characteristic is not writable"
+    "Characteristic 不支援寫入"
   );
 }
 
@@ -1341,24 +1455,26 @@ async function writeCharacteristic(
 function sleep(ms){
 
   return new Promise(
-    resolve => setTimeout(
-      resolve,
-      ms
-    )
+    resolve =>
+      setTimeout(
+        resolve,
+        ms
+      )
   );
 }
 
 
 /* =========================================================
- * HEX
+ * HEX → BYTE
  * ========================================================= */
 
 function hexToBytes(hex){
 
-  const bytes =
+  const result =
     new Uint8Array(
       hex.length/2
     );
+
 
   for(
     let i=0;
@@ -1366,14 +1482,18 @@ function hexToBytes(hex){
     i+=2
   ){
 
-    bytes[i/2] =
+    result[i/2] =
       parseInt(
-        hex.substring(i,i+2),
+        hex.substring(
+          i,
+          i+2
+        ),
         16
       );
   }
 
-  return bytes;
+
+  return result;
 }
 
 
@@ -1405,7 +1525,7 @@ async function printImage(){
   ){
 
     alert(
-      "請先連接 BLE 印表機。"
+      "BLE 印表機尚未連接。"
     );
 
     return;
@@ -1435,7 +1555,7 @@ async function printImage(){
 
     /*
      * ==========================================
-     * AE01 INIT
+     * INIT
      * ==========================================
      */
 
@@ -1450,7 +1570,6 @@ async function printImage(){
       "2221a200010080017fff",
 
       /*
-       * A9：
        * 384 × 288
        */
       "2221a9000400012030000000"
@@ -1462,18 +1581,17 @@ async function printImage(){
       of initCommands
     ){
 
-      const bytes =
-        hexToBytes(command);
-
       log(
         "AE01 → " +
         command
       );
 
+
       await writeCharacteristic(
         commandCharacteristic,
-        bytes
+        hexToBytes(command)
       );
+
 
       await sleep(
         BLE_DELAY_COMMAND
@@ -1483,12 +1601,7 @@ async function printImage(){
 
     /*
      * ==========================================
-     * Convert 1-bit bitmap
-     *
-     * 384px / 8 = 48 bytes per line
-     *
-     * black = 1
-     * MSB first
+     * PACK BITMAP
      * ==========================================
      */
 
@@ -1501,16 +1614,14 @@ async function printImage(){
 
 
     log(
-      `Bitmap packed: ${bitmap.length} bytes`,
+      `Bitmap = ${bitmap.length} bytes`,
       "ok"
     );
 
 
     /*
      * ==========================================
-     * 480-byte BLE chunks
-     *
-     * 480 bytes = 10 lines
+     * DATA
      * ==========================================
      */
 
@@ -1527,13 +1638,14 @@ async function printImage(){
 
       offset<bitmap.length;
 
-      offset += BLE_CHUNK_SIZE,
+      offset+=BLE_CHUNK_SIZE,
       chunkIndex++
     ){
 
       const end =
         Math.min(
-          offset + BLE_CHUNK_SIZE,
+          offset+
+          BLE_CHUNK_SIZE,
           bitmap.length
         );
 
@@ -1560,17 +1672,17 @@ async function printImage(){
 
 
       progressBar.style.width =
-        progress + "%";
+        progress+"%";
 
 
       progressText.textContent =
         `PRINTING ${progress}% · ` +
-        `${chunkIndex+1}/${totalChunks} · ` +
-        `${end}/${bitmap.length} bytes`;
+        `${chunkIndex+1}/${totalChunks}`;
 
 
       log(
-        `AE03 → chunk ${chunkIndex+1}/${totalChunks} (${chunk.length} bytes)`
+        `AE03 → ${chunkIndex+1}/${totalChunks} ` +
+        `${chunk.length} bytes`
       );
 
 
@@ -1582,14 +1694,12 @@ async function printImage(){
 
     /*
      * ==========================================
-     * END PRINT
+     * END
      * ==========================================
      */
 
     const endCommand =
-      hexToBytes(
-        "2221ad000100000000"
-      );
+      "2221ad000100000000";
 
 
     log(
@@ -1599,7 +1709,7 @@ async function printImage(){
 
     await writeCharacteristic(
       commandCharacteristic,
-      endCommand
+      hexToBytes(endCommand)
     );
 
 
@@ -1628,37 +1738,40 @@ async function printImage(){
     progressText.textContent =
       "PRINT ERROR";
 
+
     log(
       "PRINT ERROR: " +
       error.message,
       "err"
     );
 
+
     alert(
       "列印失敗：\n" +
       error.message
     );
 
-  }finally{
 
-    printBtn.disabled =
-      !dataCharacteristic;
+  }finally{
 
     captureBtn.disabled =
       false;
+
+    printBtn.disabled =
+      !dataCharacteristic;
   }
 }
 
 
 /* =========================================================
- * PACK 1-BIT
+ * BITMAP PACK
  *
- * 384 / 8 = 48 bytes
+ * 384 / 8 = 48 bytes / line
  * 288 lines
- * total = 13,824 bytes
+ * = 13824 bytes
  *
- * MSB first
- * black = 1
+ * MSB FIRST
+ * BLACK = 1
  * ========================================================= */
 
 function packBitmap(
@@ -1669,7 +1782,7 @@ function packBitmap(
 
   const bytes =
     new Uint8Array(
-      width/8*height
+      (width/8)*height
     );
 
 
@@ -1699,12 +1812,14 @@ function packBitmap(
 
         if(
           bits[
-            y*width+x+bit
+            y*width+
+            x+
+            bit
           ]
         ){
 
           value |=
-            (1 << (7-bit));
+            1 << (7-bit);
         }
       }
 
@@ -1720,7 +1835,7 @@ function packBitmap(
 
 
 /* =========================================================
- * GAUSSIAN BLUR 3×3
+ * GAUSSIAN BLUR
  * ========================================================= */
 
 function gaussianBlur(
@@ -1799,11 +1914,12 @@ function gaussianBlur(
 
           sum +=
             src[
-              yy*width+xx
-            ] * k;
+              yy*width+
+              xx
+            ]*k;
 
 
-          weight += k;
+          weight+=k;
         }
       }
 
@@ -1821,10 +1937,7 @@ function gaussianBlur(
 
 
 /* =========================================================
- * SOFTWARE CLAHE
- *
- * 8 × 8 tiles
- * clip limit = alpha
+ * CLAHE
  * ========================================================= */
 
 function clahe(
@@ -1913,6 +2026,7 @@ function clahe(
               )
             );
 
+
           hist[value]++;
           count++;
         }
@@ -1923,8 +2037,8 @@ function clahe(
         Math.max(
           1,
           Math.floor(
-            clipLimit *
-            count /
+            clipLimit*
+            count/
             256
           )
         );
@@ -1939,7 +2053,9 @@ function clahe(
         i++
       ){
 
-        if(hist[i]>limit){
+        if(
+          hist[i]>limit
+        ){
 
           excess +=
             hist[i]-limit;
@@ -1965,8 +2081,9 @@ function clahe(
         i++
       ){
 
-        hist[i] +=
+        hist[i]+=
           redistribution;
+
 
         if(i<remainder)
           hist[i]++;
@@ -1974,10 +2091,13 @@ function clahe(
 
 
       const cdf =
-        new Float32Array(256);
+        new Float32Array(
+          256
+        );
 
 
-      cdf[0]=hist[0];
+      cdf[0]=
+        hist[0];
 
 
       for(
@@ -1987,7 +2107,8 @@ function clahe(
       ){
 
         cdf[i]=
-          cdf[i-1]+hist[i];
+          cdf[i-1]+
+          hist[i];
       }
 
 
@@ -2021,7 +2142,7 @@ function clahe(
             y*width+x
           ] =
             (
-              (cdf[value]-cdfMin) /
+              (cdf[value]-cdfMin)/
               Math.max(
                 1,
                 count-cdfMin
@@ -2039,10 +2160,6 @@ function clahe(
 
 /* =========================================================
  * SHARPEN
- *
- * 0 -1 0
- * -1 5 -1
- * 0 -1 0
  * ========================================================= */
 
 function sharpen(
@@ -2117,10 +2234,10 @@ function sharpen(
         y*width+x
       ] =
         clamp(
-          5*center -
-          up -
-          down -
-          left -
+          5*center-
+          up-
+          down-
+          left-
           right
         );
     }
@@ -2129,13 +2246,13 @@ function sharpen(
 
 
 /* =========================================================
- * SIERRA DITHER
+ * SIERRA
  *
- *        X  5  3
+ *       X  5 3
  *
- *    2  4  5  4  2
+ *   2 4 5 4 2
  *
- *       2  3  2
+ *       2 3 2
  *
  * /32
  * ========================================================= */
@@ -2202,17 +2319,13 @@ function sierraDither(
 
 
       const newPixel =
-        oldPixel < 128
+        oldPixel<128
           ? 0
           : 255;
 
 
-      /*
-       * black = 1
-       */
-
       bits[index] =
-        newPixel === 0
+        newPixel===0
           ? 1
           : 0;
 
@@ -2235,12 +2348,13 @@ function sierraDither(
 
 
         if(
-          nx<0 ||
-          nx>=width ||
-          ny<0 ||
+          nx<0||
+          nx>=width||
+          ny<0||
           ny>=height
-        )
+        ){
           continue;
+        }
 
 
         data[
@@ -2259,7 +2373,7 @@ function sierraDither(
 
 
 /* =========================================================
- * RENDER 1-BIT
+ * RENDER
  * ========================================================= */
 
 function renderBits(
@@ -2287,16 +2401,16 @@ function renderBits(
         : 255;
 
 
-    image.data[i*4] =
+    image.data[i*4]=
       value;
 
-    image.data[i*4+1] =
+    image.data[i*4+1]=
       value;
 
-    image.data[i*4+2] =
+    image.data[i*4+2]=
       value;
 
-    image.data[i*4+3] =
+    image.data[i*4+3]=
       255;
   }
 
@@ -2310,7 +2424,7 @@ function renderBits(
 
 
 /* =========================================================
- * UTILS
+ * CLAMP
  * ========================================================= */
 
 function clamp(value){
@@ -2326,25 +2440,28 @@ function clamp(value){
 
 
 /* =========================================================
- * INITIAL LOG
+ * STARTUP
  * ========================================================= */
 
 log(
-  "RetroCam BLE Prototype ready",
+  "RetroCam initialized",
   "ok"
 );
 
 log(
-  `Target: ${WIDTH}×${HEIGHT}`
+  "Target: 384 × 288"
 );
 
 log(
-  `BLE payload: ${TOTAL_BYTES} bytes`
+  "Bitmap: 13,824 bytes"
 );
 
 log(
-  `Chunk: ${BLE_CHUNK_SIZE} bytes`
+  "BLE chunk: 480 bytes"
 );
+
+log(
+  "Waiting for printer...");
 
 </script>
 
